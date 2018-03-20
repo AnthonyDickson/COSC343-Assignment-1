@@ -9,15 +9,41 @@ class RobotController:
         """Set up the controller by getting handles to the robot's various
         sensors and motors.
         """
+        # Setup the sonar sensor
+        self.uss = UltrasonicSensor()
         # Setup the touch sensor.
         self.ts = TouchSensor()
         # Setup the colour sensor.
         self.cs = ColorSensor()
         self.cs.mode = 'COL-REFLECT'
-        self.black_threshold = 30
+        self.black = 14
+        self.white = 40
+        self.num_other = 0
+
         # Setup the motors.
         self.mLeft = LargeMotor('outB')
         self.mRight = LargeMotor('outC')
+
+    def calibrate(self):
+        while not self.ts.value():
+            pass
+
+        Sound.speak(str(self.cs.value()))
+        print(self.cs.value())
+
+        return self.cs.value()
+
+    def move_to_rel(self, degrees, speed=360):
+        """Move the robot forward a certain distance.
+
+        Args:
+            degrees (int): How many degrees to turn the robot's wheels.
+            speed (int): How fast to run the motors.
+        """
+        self.mLeft.run_to_rel_pos(position_sp=degrees, speed_sp=speed)
+        self.mRight.run_to_rel_pos(position_sp=degrees, speed_sp=speed)
+        self.mLeft.wait_while('running')
+        self.mRight.wait_while('running')
 
     def move_for_tiles(self, num_tiles, speed=360):
         """Move the robot forward in a straight line for a number of
@@ -29,14 +55,33 @@ class RobotController:
         """
         prev_val = self.cs.value()
         n = 0  # The number of black tiles counted.
+        self.num_other = 0
 
         self.mLeft.run_forever(speed_sp=speed)
         self.mRight.run_forever(speed_sp=speed)
 
         while n < num_tiles:
+            curr_val = self.cs.value()
+            print(curr_val)
+
+            if not (curr_val < self.black or curr_val > self.white):
+                self.num_other += 1
+            else:
+                self.num_other = 0
+
+            if self.num_other > 2:
+                self.mLeft.stop()
+                self.mRight.stop()
+
+                self.correct_path()
+                self.num_other = 0
+
+                self.mLeft.run_forever(speed_sp=speed)
+                self.mRight.run_forever(speed_sp=speed)
+
             # If the robot was over something white and now it is over
             # something black:
-            if prev_val < self.black_threshold <= self.cs.value():
+            if prev_val < self.black <= self.cs.value():
                 n += 1
                 self.beep()
 
@@ -46,6 +91,30 @@ class RobotController:
         self.mLeft.stop()
         self.mRight.stop()
 
+    def correct_path(self):
+        # TODO: Check tile count.
+        # TODO: Remember which side it went off last time, then next time it
+        # goes off it needs to turn in the opposite direction.
+        # TODO: Try moving 90 degrees in one direction first.
+
+        for angle in range(10, 90, 10):
+            self.rotate(angle, 180)
+
+            colour = self.cs.value()
+
+            if colour < self.black or colour > self.white:
+                return
+
+            self.rotate(-2 * angle, 180)
+
+            colour = self.cs.value()
+
+            if colour < self.black or colour > self.white:
+                return
+
+            # Reset to starting direction.
+            self.rotate(angle, 180)
+
     def rotate(self, degrees, speed=360):
         """Rotate the robot either clockwise or counter-clockwise.
 
@@ -54,8 +123,9 @@ class RobotController:
                 number to rotate the robot counter-clockwise.
             speed (int): How fast to run the motors whilst rotating.
         """
-        self.mLeft.run_to_rel_pos(position_sp=degrees, speed_sp=speed)
-        self.mRight.run_to_rel_pos(position_sp=-degrees, speed_sp=speed)
+        ratio = 1.7
+        self.mLeft.run_to_rel_pos(position_sp=degrees * ratio, speed_sp=speed)
+        self.mRight.run_to_rel_pos(position_sp=-degrees * ratio, speed_sp=speed)
         self.mLeft.wait_while('running')
         self.mRight.wait_while('running')
 
@@ -82,13 +152,24 @@ class RobotController:
 
 def main():
     rbt = RobotController()
+    rbt.move_to_rel(320)
+    rbt.rotate(90)
     rbt.move_for_tiles(15)
     rbt.rotate(90)
-    rbt.move_for_tiles(7)
+    rbt.move_to_rel(360 * 10)
     rbt.move_until_touching()
     rbt.move_for_tiles(1)
     rbt.beep()
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        btn = Button()
+        main()
+    except:
+        import traceback
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+        while not btn.any():
+            pass
