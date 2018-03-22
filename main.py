@@ -44,7 +44,7 @@ class RobotController:
         self.mLeft.wait_while('running')
         self.mRight.wait_while('running')
 
-    def move_for_tiles(self, num_tiles, speed=300):
+    def move_for_tiles(self, num_tiles, speed=360):
         """Move the robot forward in a straight line for a number of
         black tiles.
 
@@ -54,9 +54,9 @@ class RobotController:
         """
         prev_val = self.cs.value()
         n = 0  # The number of black tiles counted.
-        left = 1 # to remember if the last correct was left or right
+        dir = -1  # to remember if the last correct was left or right
         num_other = 0
-        canCount = True
+        can_count = True
 
         self.mLeft.run_forever(speed_sp=speed)
         self.mRight.run_forever(speed_sp=speed)
@@ -74,7 +74,9 @@ class RobotController:
                 self.mLeft.stop()
                 self.mRight.stop()
 
-                left = self.correct_path(left, 180)
+                dir = self.correct_path(dir, 80)
+                self.rotate(5 * -dir)
+
                 prev_val = 0
                 num_other = 0
 
@@ -83,22 +85,20 @@ class RobotController:
 
             # If the robot was over something white and now it is over
             # something black:
-            if prev_val < self.black <= self.cs.value() and canCount:
+            if prev_val < self.black <= self.cs.value() and can_count:
                 n += 1
-                canCount = False
+                can_count = False
                 self.beep()
 
             elif curr_val > self.white:
-                canCount = True
-
-
+                can_count = True
             
             prev_val = self.cs.value()
             time.sleep(0.05)
 
         self.mLeft.stop()
         self.mRight.stop()
-        return left
+        return dir
 
     def correct_path(self, dir, speed=360):
         # TODO: Check tile count.
@@ -107,8 +107,8 @@ class RobotController:
         # TODO: Try moving 90 degrees in one direction first.
 
         # Try turning right.
-        for angle in range(0, 90, 5):
-            self.rotate(5 * dir, speed)
+        for angle in range(0, 90, 10):
+            self.rotate(10 * dir, speed)
 
             colour = self.cs.value()
 
@@ -118,21 +118,20 @@ class RobotController:
         # Reset to starting direction.
         self.rotate(-90 * dir, speed)
 
-        dir *= -1
+        dir = dir * -1
         # Try turning left.
-        for angle in range(0, 90, 5):
-            self.rotate(5 * dir, speed)
+        for angle in range(0, 90, 10):
+            self.rotate(10 * dir, speed)
 
             colour = self.cs.value()
 
             if colour < self.black or colour > self.white:
                 return dir * -1
-
 
         # Reset to starting direction.
         self.rotate(-90 * dir, speed)
         # Backup
-        self.move_to_rel(-90)
+        self.move_to_rel(-180)
 
         return self.correct_path(dir * -1)
 
@@ -170,27 +169,37 @@ class RobotController:
         """Play a beep sound."""
         Sound.beep()
 
-    def find_tower(self):
+    def find_tower(self, deg=180):
         """Finds the tower by rotating the robot and using the sonar sensor
         finds the closed object.
         """
         distance = 9999
         where = 0
+        distance_threshold = 800
 
-        self.rotate(-90)
+        if self.uss.value() < distance_threshold:
+            return self.uss.value()
 
-        for angle in range(0, 180, 5):
+        self.rotate(-deg/2)
+
+        for angle in range(0, deg, 5):
             new_distance = self.uss.value()
             print('Distance: ' + str(new_distance))
 
             if new_distance < distance:
+                if new_distance < distance_threshold:
+                    return new_distance
+
                 distance = new_distance
                 where = angle
 
             self.rotate(5, 60)
             time.sleep(0.5)
 
-        self.rotate(where - 180, 180)
+        angle_to_turn = where - deg
+
+        self.rotate(angle_to_turn, deg)
+        print('Where:' + str(where), 'Angle to turn: ' + str(angle_to_turn))
         return distance
 
 
@@ -198,10 +207,13 @@ def main():
     rbt = RobotController()
     rbt.move_to_rel(320)
     rbt.rotate(90)
-    rbt.move_for_tiles(15)
+    rbt.move_for_tiles(15, 180)
     rbt.rotate(90)
     rbt.move_to_rel(360 * 10, 720)
     distance = rbt.find_tower()
+    rbt.move_to_rel(360 * (distance / 250), 360)
+
+    distance = rbt.find_tower(90)
     rbt.move_to_rel(360 * (distance / 100), 900)  # Ramming speed!
     rbt.beep()
 
