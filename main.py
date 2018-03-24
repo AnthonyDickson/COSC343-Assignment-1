@@ -17,7 +17,7 @@ class RobotController:
         # Setup the colour sensor.
         self.cs = ColorSensor()
         self.cs.mode = 'COL-REFLECT'
-        self.black = 14
+        self.black = 10
         self.white = 40
 
         # Setup the motors.
@@ -28,10 +28,32 @@ class RobotController:
         while not self.ts.value():
             pass
 
-        Sound.speak(str(self.cs.value()))
+        Sound.speak(str(self.cs.value())).wait()
         print(self.cs.value())
 
         return self.cs.value()
+
+    def is_white(self, value):
+        """Check if the given value corresponds to a white tile.
+
+        Args:
+            value (int): A value read from the robot's colour sensor.
+
+        Returns:
+            bool: True if the given value corresponds to white, False otherwise
+        """
+        return value >= self.white
+
+    def is_black(self, value):
+        """Check if the given value corresponds to a black tile.
+
+        Args:
+            value (int): A value read from the robot's colour sensor.
+
+        Returns:
+            bool: True if the given value corresponds to black, False otherwise
+        """
+        return value <= self.black
 
     def move_to_rel(self, degrees, speed=360):
         """Move the robot forward a certain distance.
@@ -66,7 +88,7 @@ class RobotController:
             curr_val = self.cs.value()
             print('Tile value: ' + str(curr_val))
 
-            if not (curr_val < self.black or curr_val > self.white):
+            if not (self.is_white(curr_val) or self.is_black(curr_val)):
                 num_other += 1
             else:
                 num_other = 0
@@ -84,17 +106,21 @@ class RobotController:
                 self.mLeft.run_forever(speed_sp=speed)
                 self.mRight.run_forever(speed_sp=speed)
 
-            # If the robot was over something white and now it is over
-            # something black:
-            if prev_val < self.black <= self.cs.value() and can_count:
+            curr_val = self.cs.value()
+
+            # If the robot was over something black and now it is over
+            # something white:
+            if self.is_black(prev_val) and self.is_white(curr_val) and can_count:
                 n += 1
                 can_count = False
                 Sound.speak(str(n))
 
-            elif curr_val > self.white:
+            elif self.is_white(curr_val):
                 can_count = True
-            
-            prev_val = self.cs.value()
+
+            if self.is_white(curr_val) or self.is_black(curr_val):
+                prev_val = curr_val
+
             time.sleep(0.05)
 
         self.mLeft.stop()
@@ -118,7 +144,7 @@ class RobotController:
 
             colour = self.cs.value()
 
-            if colour < self.black or colour > self.white:
+            if self.is_black(colour) or self.is_white(colour):
                 return direction
 
         # Reset to starting direction.
@@ -131,7 +157,7 @@ class RobotController:
 
             colour = self.cs.value()
 
-            if colour < self.black or colour > self.white:
+            if self.is_black(colour) or self.is_white(colour):
                 return direction
 
         # Reset to starting direction.
@@ -139,7 +165,7 @@ class RobotController:
         # Backup
         self.move_to_rel(-180)
 
-        return self.correct_path(direction * -1)
+        return self._correct_path(direction * -1)
 
     def rotate(self, degrees, speed=360):
         """Rotate the robot either clockwise or counter-clockwise.
@@ -174,7 +200,7 @@ class RobotController:
 
     def beep(self):
         """Play a beep sound."""
-        Sound.beep()
+        Sound.beep().wait()
 
     def find_tower(self, degrees=180, threshold=800):
         """Find the tower, align the robot with it and find the distance to it.
@@ -192,8 +218,8 @@ class RobotController:
         prev_distance = sys.maxsize
         was_found = False  # Whether or not an object was detected within the distance threshold.
 
-        if self.uss.value() < threshold:
-            return self.uss.value()
+        # if self.uss.value() < threshold: #TODO needs changed
+        #     return self.uss.value()
 
         self.rotate(int(-degrees / 2))
 
@@ -230,23 +256,26 @@ class RobotController:
 
 def main():
     rbt = RobotController()
-    rbt.move_to_rel(degrees=320)
-    rbt.rotate(degrees=90)
+    # rbt.move_to_rel(degrees=320)
+    # rbt.rotate(degrees=90)
     rbt.move_for_tiles(num_tiles=15, speed=180)
-    rbt.rotate(degrees=90)
-    rbt.move_to_rel(degrees=360 * 10, speed=720)
-    # Offset the rotation due to the robot veering to the left.
-    rbt.rotate(degrees=5, speed=180)
-    distance = rbt.find_tower(threshold=800)
-
-    # While nothing is in range...
-    while distance == sys.maxsize:
-        # Move forward a bit
-        rbt.move_to_rel(degrees=360, speed=180)
-        # Try find the tower again
-        distance = rbt.find_tower(degrees=260, threshold=800)
-
-    rbt.move_to_rel(degrees=360 * (distance / 90), speed=900)  # Ramming speed!
+    # rbt.rotate(degrees=90)
+    # rbt.move_to_rel(degrees=360 * 10, speed=720)
+    # # Offset the rotation due to the robot veering to the left.
+    # rbt.rotate(degrees=5, speed=180)
+    # distance = rbt.find_tower(threshold=800)
+    #
+    # # While nothing is in range...
+    # while distance == sys.maxsize:
+    #     # Move forward a bit
+    #     rbt.move_to_rel(degrees=360, speed=180)
+    #     # Try find the tower again
+    #     distance = rbt.find_tower(degrees=260, threshold=800)
+    #
+    # while distance > 300:
+    #     rbt.move_to_rel(degrees=360 * (distance/150), speed=360)
+    #     distance = rbt.find_tower(degrees=90, speed=180)
+    # rbt.move_to_rel(degrees=360 * (distance / 90), speed=900)  # Ramming speed!
     rbt.beep()
 
 
