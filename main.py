@@ -71,7 +71,7 @@ class RobotController:
         """
         prev_val = self.cs.value()
         n = 0  # The number of black tiles counted.
-        direction = 1  # The direction to correct the path.
+        direction = -1  # The direction to correct the path.
         num_other = 0
         num_black = 0
         can_count = True
@@ -93,7 +93,7 @@ class RobotController:
                 self.mRight.stop()
 
                 direction = self._correct_path(-direction, 80)
-                self.rotate(5 * -direction)
+                self.rotate(5 * direction)
 
                 prev_val = 0
                 num_other = 0
@@ -112,7 +112,7 @@ class RobotController:
                 n += 1
                 num_black = 0
                 can_count = False
-                Sound.speak(str(n))
+                self.beep()
 
             elif self.is_white(curr_val):
                 can_count = True
@@ -161,9 +161,9 @@ class RobotController:
         self.rotate(-90 * direction, speed)
         # Backup
         self.move_to_rel(-100)
-        self.rotate(45 * direction, 180)
+        self.rotate(-60 * direction, 180)  # was 45
 
-        return self._correct_path(direction * -1)
+        return self._correct_path(direction * -1, speed=speed)
 
     def rotate(self, degrees, speed=360):
         """Rotate the robot either clockwise or counter-clockwise.
@@ -216,9 +216,10 @@ class RobotController:
         #     return self.uss.value()
 
         self.rotate(int(-degrees / 2))
+        time.sleep(0.5)
 
-        self.mLeft.run_to_rel_pos(position_sp=degrees * self.turn_ratio, speed_sp=90)
-        self.mRight.run_to_rel_pos(position_sp=-degrees * self.turn_ratio, speed_sp=90)
+        self.mLeft.run_to_rel_pos(position_sp=degrees * self.turn_ratio, speed_sp=45)
+        self.mRight.run_to_rel_pos(position_sp=-degrees * self.turn_ratio, speed_sp=45)
 
         while 'running' in self.mLeft.state or 'running' in self.mRight.state:
             distance = self.uss.value()
@@ -235,6 +236,9 @@ class RobotController:
                 was_found = True
                 prev_distance = distance
 
+            if self.ts.value():
+                return 0
+
             time.sleep(0.05)
 
         self.mLeft.stop()
@@ -248,35 +252,45 @@ class RobotController:
         return prev_distance
 
 
+def ram(rbt):
+    rbt.move_to_rel(-360 * 1.5)
+    rbt.move_to_rel(360 * 5, speed=900)
+
+
+def approach_tower(rbt, degrees=180, threshold=400):
+    distance = rbt.find_tower(threshold=threshold)
+
+    while distance == sys.maxsize:
+        rbt.move_to_rel(degrees=360)
+        distance = rbt.find_tower(degrees=degrees, threshold=threshold)
+
+    return distance
+
+
 def main():
     rbt = RobotController()
     rbt.move_to_rel(degrees=320)
     rbt.rotate(degrees=90)
+    rbt.move_to_rel(-90)
     rbt.move_for_tiles(num_tiles=15, speed=180)
     rbt.rotate(degrees=90)
     rbt.move_to_rel(degrees=360 * 11, speed=720)
     # # Offset the rotation due to the robot veering to the left.
     # rbt.rotate(degrees=5, speed=180)
 
-    distance = rbt.find_tower(threshold=1200)
+    distance = approach_tower(rbt, threshold=1000)
+    rbt.move_to_rel(degrees=360 * (distance / 400))
 
-    while distance == sys.maxsize:
-        rbt.move_to_rel(degrees=360)
-        distance = rbt.find_tower(threshold=1200)
+    distance = approach_tower(rbt, threshold=700, degrees=260)
+    rbt.move_to_rel(degrees=360 * (distance / 400))
 
-    rbt.move_to_rel(degrees=360 * (distance / 250))
+    approach_tower(rbt, threshold=400, degrees=260)
+    ram(rbt)
 
+    while rbt.is_white(rbt.cs.value()) or rbt.is_black(rbt.cs.value()):
+        ram(rbt)
 
-    distance = rbt.find_tower(threshold=400)
-
-    # While nothing is in range...
-    while distance == sys.maxsize:
-        # Move forward a bit
-        rbt.move_to_rel(degrees=360, speed=180)
-        # Try find the tower again
-        distance = rbt.find_tower(degrees=260, threshold=400)
-
-    rbt.move_to_rel(degrees=360 * (distance / 70), speed=900)  # Ramming speed!
+    # rbt.move_to_rel(degrees=360 * (distance / 70), speed=900)  # Ramming speed!
     rbt.beep()
 
 
