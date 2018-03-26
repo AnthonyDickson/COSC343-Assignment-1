@@ -130,6 +130,8 @@ class RobotController:
         Returns:
               int: The direction the robot turned to correct it's heading.
         """
+        double_confirm = 0
+
         # Try turning one way.
         for angle in range(0, 90, 10):
             self.rotate(10 * direction, speed)
@@ -137,10 +139,16 @@ class RobotController:
             colour = self.cs.value()
 
             if self.is_black(colour) or self.is_white(colour):
-                return direction
+                double_confirm += 1
+
+                if double_confirm > 1:
+                    return direction
+            else:
+                double_confirm = 0
 
         # Reset to starting direction.
         self.rotate(-90 * direction, speed)
+        double_confirm = 0
 
         # Try turning the other way.
         direction = -1 * direction
@@ -151,7 +159,12 @@ class RobotController:
             colour = self.cs.value()
 
             if self.is_black(colour) or self.is_white(colour):
-                return direction
+                double_confirm += 1
+
+                if double_confirm > 1:
+                    return direction
+            else:
+                double_confirm = 0
 
         # Reset to starting direction.
         self.rotate(-90 * direction, speed)
@@ -281,6 +294,11 @@ def main():
     rbt.rotate(degrees=90)
     # Back up a bit, then move forward and count 15 black tiles.
     rbt.move_to_rel(-90)
+
+    # calibrate black
+    if rbt.cs.value() > rbt.black:
+        rbt.black = rbt.cs.value()
+
     rbt.move_for_tiles(num_tiles=15, speed=180)
     # Turn right and head for the tower.
     rbt.rotate(degrees=90)
